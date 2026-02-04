@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WEYLAND - 终极游戏视觉辅助平台</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            light: '#22d3ee',
+                            DEFAULT: '#06b6d4',
+                            delta: '#00ff9d',
+                            val: '#ff4655',
+                            dark: '#0f172a',
+                            warning: '#ef4444'
+                        }
+                    },
+                    fontFamily: {
+                        heading: ['Orbitron', 'sans-serif'],
+                        body: ['Inter', 'sans-serif'],
+                    },
+                    animation: {
+                        'fade-in': 'fadeIn 0.5s ease-out forwards',
+                        'pulse-slow': 'pulse 3s infinite',
+                        'spin-slow': 'spin 3s linear infinite',
+                    },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: '0', transform: 'translateY(10px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            background-color: #050505;
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(26, 46, 53, 0.4) 0%, transparent 50%),
+                radial-gradient(circle at 85% 30%, rgba(40, 20, 30, 0.2) 0%, transparent 50%);
+            color: #e2e8f0;
+            overflow-x: hidden;
+            scroll-behavior: smooth;
+        }
+
+        body.modal-open { overflow: hidden; }
+
+        .glass-card {
+            background: rgba(20, 20, 20, 0.6);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        .game-btn {
+            position: relative;
+            overflow: hidden;
+            transition: all 0.4s ease;
+        }
+        .game-btn::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(45deg, transparent 5%, rgba(255,255,255,0.1) 50%, transparent 95%);
+            transform: translateX(-100%);
+            transition: transform 0.6s;
+        }
+        .game-btn:hover::before { transform: translateX(100%); }
+        
+        .game-btn.active-delta {
+            background: rgba(0, 255, 157, 0.1);
+            border-color: #00ff9d;
+            box-shadow: 0 0 30px rgba(0, 255, 157, 0.2);
+            color: #00ff9d;
+        }
+        .game-btn.active-val {
+            background: rgba(255, 70, 85, 0.1);
+            border-color: #ff4655;
+            box-shadow: 0 0 30px rgba(255, 70, 85, 0.2);
+            color: #ff4655;
+        }
+
+        .showcase-img { transition: transform 0.5s ease, box-shadow 0.5s ease; }
+        .showcase-img:hover {
+            transform: scale(1.05);
+            z-index: 20;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.8);
+        }
+
+        .hidden-content { display: none; }
+        .fade-in-content { animation: fadeIn 0.5s ease-out forwards; }
+
+        .glow-text-delta { text-shadow: 0 0 20px rgba(0, 255, 157, 0.6); }
+        .glow-text-val { text-shadow: 0 0 20px rgba(255, 70, 85, 0.6); }
+
+        .status-badge {
+            font-size: 0.7rem;
+            padding: 2px 8px;
+            border-radius: 4px;
+            border: 1px solid;
+            font-weight: bold;
+            letter-spacing: 1px;
+        }
+        
+        /* 证据墙图片 */
+        .evidence-img {
+            transition: All 0.3s ease;
+            cursor: zoom-in;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .evidence-img:hover { transform: scale(1.1); opacity: 0.8; }
+        .evidence-wrapper {
+            position: relative;
+            overflow: hidden;
+            border-radius: 0.25rem;
+            background: rgba(0,0,0,0.5);
+            cursor: pointer;
+        }
+
+        /* 模态框通用 */
+        .modal-overlay {
+            backdrop-filter: blur(15px);
+            background-color: rgba(0, 0, 0, 0.95);
+        }
+        #modal-image {
+            max-width: 95vw;
+            max-height: 95vh;
+            object-fit: contain;
+            box-shadow: 0 0 50px rgba(0,0,0,0.8);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        /* 支付二维码样式 */
+        .qr-container {
+            position: relative;
+            padding: 10px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 0 40px rgba(255,255,255,0.1);
+        }
+        .scan-line {
+            position: absolute;
+            width: 100%;
+            height: 2px;
+            background: #00ff9d;
+            top: 0;
+            left: 0;
+            box-shadow: 0 0 10px #00ff9d;
+            animation: scan 2s linear infinite;
+            opacity: 0.8;
+        }
+        @keyframes scan {
+            0% { top: 0; }
+            50% { top: 100%; }
+            100% { top: 0; }
+        }
+    </style>
+</head>
+<body class="font-body antialiased selection:bg-white selection:text-black">
+
+    <nav class="fixed w-full z-50 top-0 p-4">
+        <div class="max-w-7xl mx-auto flex justify-between items-center glass-card rounded-full px-6 md:px-8 py-3 bg-black/80">
+            <div class="font-heading text-xl md:text-2xl font-bold tracking-widest text-white flex items-center gap-2">
+                WEYLAND <span class="hidden md:inline-block px-2 py-0.5 rounded text-[10px] bg-white/10 text-gray-300 border border-white/10">v3.0 RELEASE</span>
+            </div>
+            <div class="hidden md:flex space-x-6 text-sm font-semibold text-gray-400 items-center">
+                <a id="nav-features" href="#features-delta" class="hover:text-white transition cursor-pointer">功能特性</a>
+                <a id="nav-showcase" href="#showcase-delta" class="hover:text-white transition cursor-pointer">视觉预览</a>
+                <a id="nav-pricing" href="#pricing-delta" class="hover:text-white transition cursor-pointer">购买方案</a>
+                <a href="https://docs.qq.com/doc/DY1N4V0FkU0xSbFhv" target="_blank" class="flex items-center gap-1 hover:text-brand-light transition">
+                    <i class="fa-solid fa-book-open"></i> 使用教程
+                </a>
+            </div>
+            <a href="https://verify.weyland.lol" target="_blank" class="bg-white text-black font-bold px-6 py-2 rounded-full hover:bg-brand-light hover:shadow-[0_0_20px_rgba(34,211,238,0.6)] transition duration-300 flex items-center gap-2">
+                <i class="fa-solid fa-cloud-arrow-down"></i> <span class="hidden md:inline">客户端</span>下载
+            </a>
+        </div>
+    </nav>
+
+    <section class="min-h-screen flex flex-col items-center justify-center relative pt-24 pb-10">
+        <div id="bg-glow" class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] md:w-[800px] md:h-[800px] bg-brand-delta/10 rounded-full blur-[120px] md:blur-[150px] transition-colors duration-700"></div>
+
+        <div class="container mx-auto px-6 text-center z-10">
+            <div class="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-white/10 bg-black/40 backdrop-blur-md mb-6 animate-fade-in">
+                <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                <span class="text-xs md:text-sm text-gray-300 font-mono">王者归来 · 原 <span class="text-white font-bold">pow.fx</span> 团队操刀</span>
+            </div>
+
+            <h1 class="text-5xl md:text-8xl font-black mb-4 font-heading leading-tight text-white tracking-tight">
+                WEYLAND
+            </h1>
+            <p class="text-gray-400 text-lg md:text-xl mb-10 max-w-2xl mx-auto">
+                <i class="fa-solid fa-check text-green-400 mr-2"></i>内测公测10天0拉闸 
+                <span class="mx-2 text-gray-700">|</span> 
+                <i class="fa-solid fa-check text-green-400 mr-2"></i>拯救市场
+            </p>
+            
+            <div class="flex flex-col md:flex-row gap-4 md:gap-6 justify-center items-center mb-12 w-full max-w-4xl mx-auto">
+                <button onclick="switchGame('delta')" id="btn-delta" class="game-btn active-delta glass-card px-8 py-6 rounded-xl w-full md:w-72 group text-left border-l-4">
+                    <div class="flex items-center justify-between mb-2">
+                        <i class="fa-solid fa-jet-fighter text-2xl"></i>
+                        <span class="status-badge border-brand-delta text-brand-delta">STABLE</span>
+                    </div>
+                    <h3 class="text-2xl font-bold font-heading">三角洲行动</h3>
+                    <p class="text-xs opacity-60 mt-1 uppercase tracking-wider">Delta Force</p>
+                </button>
+
+                <button onclick="switchGame('val')" id="btn-val" class="game-btn glass-card px-8 py-6 rounded-xl w-full md:w-72 group text-left border-l-4 border-transparent hover:border-brand-val">
+                    <div class="flex items-center justify-between mb-2">
+                        <i class="fa-solid fa-crosshairs text-2xl"></i>
+                        <span class="status-badge border-brand-val text-brand-val">RETURN</span>
+                    </div>
+                    <h3 class="text-2xl font-bold font-heading">无畏契约</h3>
+                    <p class="text-xs opacity-60 mt-1 uppercase tracking-wider">Valorant</p>
+                </button>
+            </div>
+            
+            <div class="flex flex-wrap justify-center gap-4 text-xs md:text-sm text-gray-500 font-mono border-t border-white/5 pt-8 max-w-3xl mx-auto">
+                <span class="flex items-center gap-2"><i class="fa-brands fa-windows text-blue-500"></i> Win10 / Win11</span>
+                <span class="hidden md:inline">|</span>
+                <span class="flex items-center gap-2"><i class="fa-solid fa-microchip text-blue-400"></i> Intel / AMD</span>
+                <span class="hidden md:inline">|</span>
+                <span class="flex items-center gap-2"><i class="fa-solid fa-shop text-orange-400"></i> 完美兼容网吧/家庭</span>
+            </div>
+        </div>
+    </section>
+
+    <div id="dynamic-content">
+        <div id="content-delta" class="fade-in-content">
+            <section id="features-delta" class="py-24">
+                <div class="container mx-auto px-6">
+                    <div class="text-center mb-16">
+                        <h2 class="text-3xl font-heading font-bold mb-2">三角洲 <span class="text-brand-delta glow-text-delta">核心科技</span></h2>
+                        <p class="text-gray-500">专为摸金模式打造，过玄武、过磐石检测。</p>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div class="glass-card p-8 rounded-2xl hover:bg-brand-delta/5 transition">
+                            <i class="fa-solid fa-eye text-brand-delta text-3xl mb-4"></i>
+                            <h3 class="text-xl font-bold text-white mb-2">显卡驱动绘制</h3>
+                            <p class="text-gray-400 text-sm">行业领先的GPU驱动级绘制技术，不卡FPS，画面丝滑流畅。</p>
+                        </div>
+                        <div class="glass-card p-8 rounded-2xl hover:bg-brand-delta/5 transition">
+                            <i class="fa-solid fa-box-open text-brand-delta text-3xl mb-4"></i>
+                            <h3 class="text-xl font-bold text-white mb-2">智能物品透视</h3>
+                            <p class="text-gray-400 text-sm">精准显示高价值金色/紫色物资，支持自定义过滤。</p>
+                        </div>
+                        <div class="glass-card p-8 rounded-2xl hover:bg-brand-delta/5 transition">
+                            <i class="fa-solid fa-video-slash text-brand-delta text-3xl mb-4"></i>
+                            <h3 class="text-xl font-bold text-white mb-2">直播/截图无痕</h3>
+                            <p class="text-gray-400 text-sm">完美过OBS直播、过平台截图，屏幕上干干净净。</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="showcase-delta" class="py-24 bg-brand-delta/5">
+                <div class="container mx-auto px-6 flex flex-col md:flex-row items-center gap-12">
+                    <div class="md:w-1/3">
+                        <div class="inline-block bg-brand-delta/20 text-brand-delta px-3 py-1 rounded text-xs font-bold mb-4">SECURITY FIRST</div>
+                        <h2 class="text-4xl font-heading font-bold mb-6">全场信息 <br><span class="text-brand-delta">尽在掌握</span></h2>
+                         <ul class="space-y-4 text-gray-300">
+                            <li><i class="fa-solid fa-check text-brand-delta mr-2"></i> <strong>过检测：</strong> 完美过玄武、过磐石系统</li>
+                            <li><i class="fa-solid fa-check text-brand-delta mr-2"></i> <strong>自瞄：</strong> 平滑自瞄，支持预判</li>
+                            <li><i class="fa-solid fa-check text-brand-delta mr-2"></i> <strong>透视：</strong> 骨骼、血量、距离、阵营显示</li>
+                        </ul>
+                    </div>
+                    <div class="md:w-2/3 w-full">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="relative group">
+                                <img src="delta1.png" class="showcase-img w-full rounded-lg border-2 border-brand-delta/30 shadow-lg" alt="Delta Screenshot 1">
+                                <p class="text-center text-xs text-brand-delta mt-2 opacity-60">效果图 I</p>
+                            </div>
+                            <div class="relative group">
+                                <img src="delta2.png" class="showcase-img w-full rounded-lg border-2 border-brand-delta/30 shadow-lg" alt="Delta Screenshot 2">
+                                <p class="text-center text-xs text-brand-delta mt-2 opacity-60">效果图 II</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="pricing-delta" class="py-24">
+                <div class="container mx-auto px-6">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+                        <div class="glass-card p-8 rounded-2xl flex flex-col justify-between">
+                            <div>
+                                <h3 class="text-gray-400">三角洲 - 天卡</h3>
+                                <div class="text-4xl font-bold text-white my-4">¥ 30</div>
+                            </div>
+                            <button onclick="startPayment('pay_30.jpg', '三角洲行动 - 天卡 (24h)')" class="w-full py-3 border border-brand-delta text-brand-delta rounded hover:bg-brand-delta hover:text-black transition flex justify-center items-center gap-2">
+                                <i class="fa-solid fa-cart-shopping"></i> 购买天卡
+                            </button>
+                        </div>
+                        <div class="glass-card p-8 rounded-2xl border-brand-delta shadow-[0_0_20px_rgba(0,255,157,0.2)] flex flex-col justify-between transform scale-105 z-10">
+                            <div>
+                                <div class="text-brand-delta text-xs font-bold mb-2">LIMITED 限量供应</div>
+                                <h3 class="text-white text-xl font-bold">三角洲 - 周卡</h3>
+                                <div class="text-4xl font-bold text-white my-4">¥ 150</div>
+                            </div>
+                            <button onclick="startPayment('pay_150.jpg', '三角洲行动 - 周卡 (7 Days)')" class="w-full py-3 bg-brand-delta text-black font-bold rounded hover:bg-white transition flex justify-center items-center gap-2">
+                                <i class="fa-solid fa-bolt"></i> 立即购买
+                            </button>
+                        </div>
+                        <div class="glass-card p-8 rounded-2xl flex flex-col justify-between">
+                            <div>
+                                <h3 class="text-gray-400">三角洲 - 月卡</h3>
+                                <div class="text-4xl font-bold text-white my-4">¥ 450</div>
+                            </div>
+                            <button onclick="startPayment('pay_450.jpg', '三角洲行动 - 月卡 (30 Days)')" class="w-full py-3 border border-brand-delta text-brand-delta rounded hover:bg-brand-delta hover:text-black transition flex justify-center items-center gap-2">
+                                <i class="fa-solid fa-crown"></i> 购买月卡
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <div id="content-val" class="hidden-content">
+            <section id="features-val" class="py-24">
+                <div class="container mx-auto px-6">
+                    <div class="text-center mb-16">
+                        <h2 class="text-3xl font-heading font-bold mb-2">Valorant <span class="text-brand-val glow-text-val">内部回归</span></h2>
+                        <p class="text-gray-500">原 pow.fx 强势回归，以天卡形式上架拯救市场。</p>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div class="glass-card p-8 rounded-2xl hover:bg-brand-val/5 transition">
+                            <i class="fa-solid fa-microchip text-brand-val text-3xl mb-4"></i>
+                            <h3 class="text-xl font-bold text-white mb-2">演员级自瞄</h3>
+                            <p class="text-gray-400 text-sm">极致平滑算法，模拟真人手感，支持自定义FOV。</p>
+                        </div>
+                        <div class="glass-card p-8 rounded-2xl hover:bg-brand-val/5 transition">
+                            <i class="fa-solid fa-map text-brand-val text-3xl mb-4"></i>
+                            <h3 class="text-xl font-bold text-white mb-2">大地图雷达</h3>
+                            <p class="text-gray-400 text-sm">支持小地图/大地图雷达显示，知晓敌人动向。</p>
+                        </div>
+                        <div class="glass-card p-8 rounded-2xl hover:bg-brand-val/5 transition">
+                            <i class="fa-solid fa-bolt text-brand-val text-3xl mb-4"></i>
+                            <h3 class="text-xl font-bold text-white mb-2">自动扳机</h3>
+                            <p class="text-gray-400 text-sm">毫秒级响应，准星变红自动开火，反应速度可调。</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="showcase-val" class="py-24 bg-brand-val/5">
+                <div class="container mx-auto px-6 flex flex-col md:flex-row-reverse items-center gap-12">
+                    <div class="md:w-1/3 text-right">
+                        <div class="inline-block bg-brand-val/20 text-brand-val px-3 py-1 rounded text-xs font-bold mb-4">LEGEND RETURNS</div>
+                        <h2 class="text-4xl font-heading font-bold mb-6">瓦罗兰特 <br><span class="text-brand-val">上分利器</span></h2>
+                        <ul class="space-y-4 text-gray-300 inline-block text-left">
+                            <li><i class="fa-solid fa-check text-brand-val mr-2"></i> <strong>0拉闸：</strong> 内部测试10天无封禁记录</li>
+                            <li><i class="fa-solid fa-check text-brand-val mr-2"></i> <strong>兼容强：</strong> 完美支持Win10/11，Intel/AMD</li>
+                            <li><i class="fa-solid fa-check text-brand-val mr-2"></i> <strong>过直播：</strong> OBS推流不可见，主播专用</li>
+                        </ul>
+                    </div>
+                    <div class="md:w-2/3 w-full">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="col-span-2 relative">
+                                <img src="val1.jpg" class="showcase-img w-full h-64 md:h-80 object-cover rounded-lg border-2 border-brand-val/30 shadow-lg" alt="Valorant Main">
+                                <div class="absolute bottom-2 right-2 bg-black/70 px-2 rounded text-xs text-brand-val">Main View</div>
+                            </div>
+                            <div class="relative">
+                                <img src="val2.jpg" class="showcase-img w-full h-32 md:h-48 object-cover rounded-lg border border-brand-val/20" alt="Valorant Feature 1">
+                            </div>
+                            <div class="relative">
+                                <img src="val3.jpg" class="showcase-img w-full h-32 md:h-48 object-cover rounded-lg border border-brand-val/20" alt="Valorant Feature 2">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="pricing-val" class="py-24">
+                <div class="container mx-auto px-6">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+                        <div class="glass-card p-8 rounded-2xl border-brand-val shadow-[0_0_20px_rgba(255,70,85,0.2)] flex flex-col justify-between transform scale-105 z-10">
+                            <div>
+                                <div class="text-brand-val text-xs font-bold mb-2">拯救市场特惠</div>
+                                <h3 class="text-white text-xl font-bold">无畏契约 - 天卡</h3>
+                                <div class="text-4xl font-bold text-white my-4">¥ 25</div>
+                            </div>
+                            <button onclick="startPayment('pay_25.jpg', '无畏契约 - 天卡 (24h)')" class="w-full py-3 bg-brand-val text-white font-bold rounded hover:bg-white hover:text-black transition flex justify-center items-center gap-2">
+                                <i class="fa-solid fa-bolt"></i> 立即购买
+                            </button>
+                        </div>
+                        <div class="glass-card p-8 rounded-2xl opacity-80 flex flex-col justify-between">
+                            <div>
+                                <h3 class="text-gray-400">无畏契约 - 周卡</h3>
+                                <div class="text-4xl font-bold text-white my-4">限量</div>
+                            </div>
+                            <button class="w-full py-3 border border-gray-600 text-gray-400 rounded cursor-not-allowed">暂需预定</button>
+                        </div>
+                        <div class="glass-card p-8 rounded-2xl opacity-80 flex flex-col justify-between">
+                            <div>
+                                <h3 class="text-gray-400">无畏契约 - 月卡</h3>
+                                <div class="text-4xl font-bold text-white my-4">限量</div>
+                            </div>
+                            <button class="w-full py-3 border border-gray-600 text-gray-400 rounded cursor-not-allowed">暂需预定</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <section id="fraud-warning" class="py-20 relative overflow-hidden bg-red-900/10 border-t border-b border-red-600/30">
+        <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-red-600 to-transparent"></div>
+        <div class="container mx-auto px-6 relative z-10">
+            <div class="flex flex-col lg:flex-row gap-12">
+                <div class="lg:w-1/3 flex flex-col justify-center">
+                    <div class="flex items-center gap-3 mb-6">
+                        <i class="fa-solid fa-triangle-exclamation text-brand-warning text-4xl animate-pulse"></i>
+                        <h2 class="text-3xl md:text-4xl font-heading font-black text-white">谨防诈骗 · <span class="text-brand-warning">官方公告</span></h2>
+                    </div>
+                    
+                    <div class="space-y-6 text-gray-300">
+                        <div class="flex gap-4">
+                            <div class="mt-1"><i class="fa-solid fa-ban text-brand-warning"></i></div>
+                            <div>
+                                <h4 class="text-white font-bold text-lg">警惕恶意改价与押金骗局</h4>
+                                <p class="text-sm text-gray-400 mt-1">不良卡网利用平台改价或“低价优惠”骗取押金。右侧为真实用户<strong class="text-white">被骗过程记录</strong>（点击图片放大）。</p>
+                            </div>
+                        </div>
+
+                        <div class="flex gap-4">
+                            <div class="mt-1"><i class="fa-solid fa-server text-brand-warning"></i></div>
+                            <div>
+                                <h4 class="text-white font-bold text-lg">违规卡密已被销毁</h4>
+                                <p class="text-sm text-gray-400 mt-1">系统已检测到欺诈行为，相关批次卡密已<strong class="text-brand-warning">全部删除并封禁</strong>（点击图片放大）。</p>
+                            </div>
+                        </div>
+
+                        <div class="glass-card bg-brand-warning/10 border-brand-warning/30 p-4 rounded-lg mt-4">
+                            <p class="text-brand-warning text-sm font-bold text-center">
+                                <i class="fa-solid fa-shield-halved mr-2"></i>
+                                官方郑重声明：违规渠道购买无法使用，拒不售后！
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="lg:w-2/3 w-full">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="relative group glass-card p-2 rounded-lg border-red-900/50" onclick="openModal('scam1.jpg')">
+                            <div class="absolute top-0 left-0 bg-gray-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-br z-10">被骗过程 I</div>
+                            <div class="evidence-wrapper h-40 md:h-48"><img src="scam1.jpg" alt="Evidence" class="evidence-img"></div>
+                        </div>
+                        <div class="relative group glass-card p-2 rounded-lg border-red-900/50" onclick="openModal('scam2.jpg')">
+                            <div class="absolute top-0 left-0 bg-gray-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-br z-10">被骗过程 II</div>
+                            <div class="evidence-wrapper h-40 md:h-48"><img src="scam2.jpg" alt="Evidence" class="evidence-img"></div>
+                        </div>
+                        <div class="relative group glass-card p-2 rounded-lg border-red-900/50" onclick="openModal('scam3.jpg')">
+                            <div class="absolute top-0 left-0 bg-gray-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-br z-10">被骗过程 III</div>
+                            <div class="evidence-wrapper h-40 md:h-48"><img src="scam3.jpg" alt="Evidence" class="evidence-img"></div>
+                        </div>
+                        <div class="relative group glass-card p-2 rounded-lg border-brand-warning shadow-[0_0_15px_rgba(239,68,68,0.3)]" onclick="openModal('deleted_keys.png')">
+                            <div class="absolute top-0 left-0 bg-brand-warning text-black text-[10px] font-bold px-2 py-0.5 rounded-br z-10 animate-pulse">⚠️ 已删卡密实锤</div>
+                            <div class="evidence-wrapper h-40 md:h-48"><img src="deleted_keys.png" alt="Evidence" class="evidence-img"></div>
+                        </div>
+                    </div>
+                    <p class="text-center text-gray-500 text-xs mt-3"><i class="fa-solid fa-magnifying-glass mr-1"></i> 点击图片可全屏放大查看详情</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer class="border-t border-gray-800 py-12 bg-black text-center">
+        <span class="text-2xl font-heading font-bold text-white">WEYLAND</span>
+        <div class="flex justify-center gap-6 my-6 text-sm text-gray-400">
+            <a href="https://verify.weyland.lol" target="_blank" class="hover:text-white">下载客户端</a>
+            <span>|</span>
+            <a href="https://docs.qq.com/doc/DY1N4V0FkU0xSbFhv" target="_blank" class="hover:text-white">查看教程</a>
+        </div>
+        <p class="text-gray-600 text-xs">© 2026 Weyland Systems. Secure & Undetected.</p>
+    </footer>
+
+    <div id="image-modal" class="fixed inset-0 z-[100] modal-overlay hidden items-center justify-center p-4 cursor-zoom-out animate-fade-in" onclick="closeModal()">
+        <img id="modal-image" src="" alt="Enlarged Evidence" class="rounded-lg">
+        <button class="absolute top-4 right-4 text-white text-4xl hover:text-brand-warning transition">&times;</button>
+    </div>
+
+    <div id="payment-modal" class="fixed inset-0 z-[200] bg-[#050505] hidden flex-col items-center justify-center p-4 animate-fade-in">
+        <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-blue-500 to-transparent"></div>
+        <button onclick="closePayment()" class="absolute top-6 right-6 text-gray-400 hover:text-white text-xl flex items-center gap-2">
+            <span class="text-sm uppercase tracking-widest">Cancel</span> <i class="fa-solid fa-xmark"></i>
+        </button>
+
+        <div class="text-center mb-8">
+            <h2 class="text-2xl md:text-4xl font-heading font-bold text-white mb-2">安全收银台</h2>
+            <p id="payment-title" class="text-brand-light font-mono text-lg">正在创建订单...</p>
+        </div>
+
+        <div class="bg-white p-1 rounded-2xl shadow-[0_0_60px_rgba(6,182,212,0.15)]">
+            <div class="qr-container">
+                <img id="payment-qr-img" src="" alt="Payment QR Code" class="w-64 h-64 object-contain">
+                <div class="scan-line"></div>
+            </div>
+        </div>
+
+        <div class="mt-8 flex flex-col items-center gap-4">
+            <div class="flex items-center gap-3 text-gray-300 bg-white/5 px-6 py-3 rounded-full border border-white/10">
+                <i class="fa-solid fa-circle-notch fa-spin text-brand-light"></i>
+                <span class="text-sm font-mono">支付成功后 <span class="text-white font-bold">自动跳转</span> 发卡页...</span>
+            </div>
+            
+            <div class="flex gap-4 mt-2 opacity-50 grayscale hover:grayscale-0 transition duration-500">
+                <i class="fa-brands fa-weixin text-3xl text-green-500"></i>
+                <i class="fa-brands fa-alipay text-3xl text-blue-500"></i>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 游戏切换逻辑
+        function switchGame(game) {
+            const btnDelta = document.getElementById('btn-delta');
+            const btnVal = document.getElementById('btn-val');
+            const contentDelta = document.getElementById('content-delta');
+            const contentVal = document.getElementById('content-val');
+            const bgGlow = document.getElementById('bg-glow');
+            
+            const linkFeatures = document.getElementById('nav-features');
+            const linkShowcase = document.getElementById('nav-showcase');
+            const linkPricing = document.getElementById('nav-pricing');
+
+            if (game === 'delta') {
+                btnDelta.classList.add('active-delta');
+                btnDelta.classList.remove('border-transparent');
+                btnVal.classList.remove('active-val');
+                btnVal.classList.add('border-transparent');
+                
+                bgGlow.classList.remove('bg-brand-val/10');
+                bgGlow.classList.add('bg-brand-delta/10');
+
+                contentVal.classList.add('hidden-content');
+                contentVal.classList.remove('fade-in-content');
+                contentDelta.classList.remove('hidden-content');
+                contentDelta.classList.add('fade-in-content');
+
+                linkFeatures.setAttribute('href', '#features-delta');
+                linkShowcase.setAttribute('href', '#showcase-delta');
+                linkPricing.setAttribute('href', '#pricing-delta');
+
+            } else if (game === 'val') {
+                btnVal.classList.add('active-val');
+                btnVal.classList.remove('border-transparent');
+                btnDelta.classList.remove('active-delta');
+                btnDelta.classList.add('border-transparent');
+
+                bgGlow.classList.remove('bg-brand-delta/10');
+                bgGlow.classList.add('bg-brand-val/10');
+
+                contentDelta.classList.add('hidden-content');
+                contentDelta.classList.remove('fade-in-content');
+                contentVal.classList.remove('hidden-content');
+                contentVal.classList.add('fade-in-content');
+
+                linkFeatures.setAttribute('href', '#features-val');
+                linkShowcase.setAttribute('href', '#showcase-val');
+                linkPricing.setAttribute('href', '#pricing-val');
+            }
+        }
+
+        // 图片放大模态框逻辑
+        function openModal(imgSrc) {
+            const modal = document.getElementById('image-modal');
+            const modalImg = document.getElementById('modal-image');
+            modalImg.src = imgSrc;
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            document.body.classList.add('modal-open');
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('image-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            document.body.classList.remove('modal-open');
+        }
+
+        // 支付跳转逻辑
+        function startPayment(qrSrc, title) {
+            const payModal = document.getElementById('payment-modal');
+            const payImg = document.getElementById('payment-qr-img');
+            const payTitle = document.getElementById('payment-title');
+
+            payImg.src = qrSrc;
+            payTitle.innerText = title;
+            
+            payModal.classList.remove('hidden');
+            payModal.classList.add('flex');
+            document.body.classList.add('modal-open');
+
+            // 模拟支付检测效果 (实际项目中这里接Websocket或轮询)
+            console.log(`Initialized payment for: ${title}`);
+        }
+
+        function closePayment() {
+            const payModal = document.getElementById('payment-modal');
+            payModal.classList.add('hidden');
+            payModal.classList.remove('flex');
+            document.body.classList.remove('modal-open');
+        }
+    </script>
+</body>
+</html>
